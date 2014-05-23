@@ -52,13 +52,15 @@ class Cursor(object):
         if res.status.errorCode is not None:
             raise Pyhs2Exception(res.status.errorCode, res.status.errorMessage)
         
-    def fetch(self):
-        rows = []
+    def fetch(self, batchSize = 1000):
         fetchReq = TFetchResultsReq(operationHandle=self.operationHandle,
                                     orientation=TFetchOrientation.FETCH_NEXT,
-                                    maxRows=10000)
-        self._fetch(rows, fetchReq)
-        return rows
+                                    maxRows=batchSize)
+        resultsRes = self.client.FetchResults(fetchReq)
+        for row in resultsRes.results.rows:
+            rowData = [get_value(col) for col in row.colVals]
+            yield rowData
+
 
     def getSchema(self):
         if self.operationHandle:
@@ -88,18 +90,6 @@ class Cursor(object):
 
     def __exit__(self, _exc_type, _exc_value, _traceback):
         self.close()
-
-    def _fetch(self, rows, fetchReq):
-        while True:
-            resultsRes = self.client.FetchResults(fetchReq)
-            for row in resultsRes.results.rows:
-                rowData= []
-                for i, col in enumerate(row.colVals):
-                    rowData.append(get_value(col))
-                rows.append(rowData)
-            if len(resultsRes.results.rows) == 0:
-                break
-        return rows
 
     def close(self):
         if self.operationHandle is not None:
